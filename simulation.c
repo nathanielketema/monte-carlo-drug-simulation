@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <unistd.h>
+
 int ROWS, COLS;
 
 typedef enum {
@@ -14,9 +16,9 @@ typedef enum {
 char *stateToChar(State state) {
     switch (state) {
         case NORMAL:
-            return "🙂";
+            return "🧑🏾‍🦱";
         case ADDICT:
-            return "🤕";
+            return "🤢";
         case CONVERTER:
             return "😈";
         case RECOVERER:
@@ -24,40 +26,56 @@ char *stateToChar(State state) {
     }
 }
 
+float getInfluence(State state) {
+    switch (state) {
+        case NORMAL:
+            return 1.0;
+        case ADDICT:
+            return 1.0;
+        case CONVERTER:
+            return 3.0;
+        case RECOVERER:
+            return 3.0;
+    }
+}
+
+int isAddictType(State state) {
+    return state == ADDICT || state == CONVERTER;
+}
+
+int isNormalType(State state) {
+    return state == NORMAL || state == RECOVERER;
+}
+
 void fillGrid(State grid[ROWS][COLS], int seed) {
     srand(seed);
     for (int r = 0; r < ROWS; r++) {
         for (int c = 0; c < COLS; c++) {
-            if (r == 0 || r == ROWS - 1 || c == 0 || c == COLS - 1) {
+            // Initially: 
+            // - 70% NORMAL 
+            // - 20% ADDICT 
+            // - 5% RECOVERER
+            // - 5% CONVERTER
+            int rand_num = rand() % 100;
+            if (rand_num < 70) {
                 grid[r][c] = NORMAL;
-            }
+            } 
+            else if (rand_num < 90) {
+                grid[r][c] = ADDICT;
+            } 
+            else if (rand_num < 95) {
+                grid[r][c] = RECOVERER;
+            } 
             else {
-                // Initially (we could change this to see the difference): 
-                // - 50% NORMAL 
-                // - 20% ADDICT 
-                // - 15% CONVERTER
-                // - 15% RECOVERER
-                int rand_num = rand() % 100;
-                if (rand_num < 50) {
-                    grid[r][c] = NORMAL;
-                } 
-                else if (rand_num < 70) {
-                    grid[r][c] = ADDICT;
-                } 
-                else if (rand_num < 85) {
-                    grid[r][c] = CONVERTER;
-                } 
-                else {
-                    grid[r][c] = RECOVERER;
-                }
+                grid[r][c] = CONVERTER;
             }
         }
     }
 }
 
 void printGrid(State grid[ROWS][COLS]) {
-    for (int r = 1; r < ROWS - 1; r++) {
-        for (int c = 1; c < COLS - 1; c++) {
+    for (int r = 0; r < ROWS; r++) {
+        for (int c = 0; c < COLS; c++) {
             printf("%s", stateToChar(grid[r][c]));
         }
         printf("\n");
@@ -69,9 +87,10 @@ void printStats(State grid[ROWS][COLS]) {
     int addict = 0; 
     int converter = 0;
     int recoverer = 0;
+    int total = ROWS * COLS;
 
-    for (int r = 1; r < ROWS - 1; r++) {
-        for (int c = 1; c < COLS - 1; c++) {
+    for (int r = 0; r < ROWS; r++) {
+        for (int c = 0; c < COLS; c++) {
             switch (grid[r][c]) {
                 case NORMAL: 
                     normal++; 
@@ -90,64 +109,78 @@ void printStats(State grid[ROWS][COLS]) {
     }
 
     printf("Stats:\n");
-    printf("- Normal = %d\n", normal);
-    printf("- Addict = %d\n", addict);
-    printf("- Converter = %d\n", converter);
-    printf("- Recoverer = %d\n", recoverer);
+    printf("- Normal    = %4d (%5.2f%%)\n", normal, (normal * 100.0) / total);
+    printf("- Addict    = %4d (%5.2f%%)\n", addict, (addict * 100.0) / total);
+    printf("- Recoverer = %4d (%5.2f%%)\n", recoverer, (recoverer * 100.0) / total);
+    printf("- Converter = %4d (%5.2f%%)\n", converter, (converter * 100.0) / total);
 }
 
 State checker(State grid[ROWS][COLS], int r, int c) {
-    if (r == 0 || r == ROWS - 1 || c == 0 || c == COLS - 1) {
-        return NORMAL;
-    }
-
     State current = grid[r][c];
 
-    // Both converters and recoverers stay the same
-    if (current == CONVERTER || current == RECOVERER) {
-        return current;
-    }
-
-    int addict_count = 0;
-    int converter_count = 0;
-    int recoverer_count = 0;
+    float addict_pressure = 0.0;
+    float normal_pressure = 0.0;
 
     for (int i = -1; i <= 1; i++) {
         for (int j = -1; j <= 1; j++) {
             if (!(i == 0 && j == 0)) {
-                int nr = r + i;
-                int nc = c + j;
+                int nr = (r + i + ROWS) % ROWS;
+                int nc = (c + j + COLS) % COLS;
 
-                switch (grid[nr][nc]) {
-                    case ADDICT:
-                        addict_count++;
-                        break;
-                    case CONVERTER:
-                        converter_count++;
-                        break;
-                    case RECOVERER:
-                        recoverer_count++;
-                        break;
+                State neighbor = grid[nr][nc];
+                float influence = getInfluence(neighbor);
+
+                if (isAddictType(neighbor)) {
+                    addict_pressure += influence;
+                } else {
+                    normal_pressure += influence;
                 }
             }
         }
     }
 
-    // probability of converting
-    int probability = (addict_count * 10) + (converter_count * 25) - (recoverer_count * 20);
+    // epislon is there to avoid dividing by zero
+    float epsilon = 0.0001;
+    float total_pressure = addict_pressure + normal_pressure + epsilon;
+    float transition_prob;
 
-    if (current == NORMAL) {
-        if (probability > 50) {
-            return ADDICT;
-        }
-        return NORMAL;
+    if (isAddictType(current)) {
+        transition_prob = normal_pressure / total_pressure;
+    } else {
+        transition_prob = addict_pressure / total_pressure;
     }
-    else {
-        if (probability <= 55) {
-            return NORMAL;
+
+    float rand_val = (float)rand() / RAND_MAX;
+    if (rand_val < transition_prob) {
+        // 8% chance to become special type (Converter/Recoverer)
+        float promotion_rate = 0.08; 
+        float promotion_roll = (float)rand() / RAND_MAX;
+
+        if (isAddictType(current)) {
+            if (promotion_roll < promotion_rate) {
+                return RECOVERER;
+            } else {
+                return NORMAL;
+            }
+        } else {
+            if (promotion_roll < promotion_rate) {
+                return CONVERTER;
+            } else {
+                return ADDICT;
+            }
         }
-        return ADDICT;
     }
+
+    return current;
+}
+
+void clearScreen() {
+    printf("\033[2J");
+    printf("\033[H");
+}
+
+void moveCursorHome() {
+    printf("\033[H");
 }
 
 int main(int argc, char *argv[])
@@ -157,48 +190,49 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    ROWS = atoi(argv[1]) + 2;
-    COLS = atoi(argv[2]) + 2;
+    ROWS = atoi(argv[1]);
+    COLS = atoi(argv[2]);
 
-    int seed, generations;
+    int seed, generations, delay_ms;
 
     printf("seed: ");
     scanf("%d", &seed);
-printf("generations: ");
+    printf("generations: ");
     scanf("%d", &generations);
+    printf("delay between frames: ");
+    scanf("%d", &delay_ms);
     printf("\n");
 
-    State oldGrid[ROWS][COLS];
-    State newGrid[ROWS][COLS];
+    State (*oldGrid)[COLS] = malloc(ROWS * sizeof(*oldGrid));
+    State (*newGrid)[COLS] = malloc(ROWS * sizeof(*newGrid));
 
-    printf("Generation 1\n");
-    printf("------------\n");
+    clearScreen();
     fillGrid(oldGrid, seed);
     printGrid(oldGrid);
-    printStats(oldGrid);
-    printf("\n");
+    fflush(stdout);
+    usleep(delay_ms * 100);
+    //printf("\n");
 
     for (int i = 2; i <= generations; i++) {
-        printf("Generation %d\n", i);
-        printf("------------\n");
-
         for (int r = 0; r < ROWS; r++ ) {
             for (int c = 0; c < COLS; c++ ) {
                 newGrid[r][c] = checker(oldGrid, r, c);
             }
         }
-
+        moveCursorHome();
         printGrid(newGrid);
-        printStats(newGrid);
-        printf("\n");
+        //printf("\n");
+        fflush(stdout);
+        usleep(delay_ms * 100);
 
-        // update grid
         for (int r = 0; r < ROWS; r++) {
             for (int c = 0; c < COLS; c++) {
                 oldGrid[r][c] = newGrid[r][c];
             }
         }
     }
+
+    printStats(oldGrid);
 
     return 0;
 }
