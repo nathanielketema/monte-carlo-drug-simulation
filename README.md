@@ -15,14 +15,14 @@ The four states:
 
 Distribution:
 
-- 50% Normal
+- 70% Normal
 - 20% Addict
-- 15% Converter
-- 15% Recoverer
+- 5% Converter
+- 5% Recoverer
 
-Influence:
+Influence Weight:
 
-- Addicts: 10% conversion probability per neighbor
-- Converters: 25% conversion probability per neighbor
-- Recoverers: 20% conversion probability per neighbor
-- Transition threshold: 50% probability
+- Normal: 1.0
+- Addicts: 1.0
+- Converters: 3.0
+- Recoverers: 3.0
