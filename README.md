@@ -11,7 +11,7 @@ The four states:
 - Converter: addicts who also influence their friends
 - Recoverer: people who go out of their way to help and correct addiction
 
-### Inital setup:
+## Inital setup:
 
 Distribution:
 
@@ -26,3 +26,23 @@ Influence Weight:
 - Addicts: 1.0
 - Converters: 3.0
 - Recoverers: 3.0
+
+## Getting started
+
+1. Navigate to src:
+
+   ```console
+   cd src/
+   ```
+
+2. Compile and run:
+   - Sequential
+     ```console
+     gcc simulation.c -o sequential
+     ./sequential row_size col_size
+     ```
+   - Parallel
+     ```console
+     gcc simulation_omp.c -fopenmp -o parallel
+     ./parallel row_size col_size
+     ```
